@@ -4,45 +4,52 @@
 #
 
 import psycopg2
+from contextlib import contextmanager
 
 
 def connect():
     """Connect to the PostgreSQL database.  Returns a database connection."""
-    return psycopg2.connect(database = "tournament")
+    try:
+        return psycopg2.connect(database = "tournament")
+    except:
+        print("Connection failed")
+
+@contextmanager
+def GetCursor():
+    """Helper function to get a psycopg2 cursor"""
+    Database = connect()
+    Cursor = Database.cursor()
+    try:
+        yield Cursor
+    except:
+        raise
+    else:
+        Database.commit()
+    finally:
+        Cursor.close()
+        Database.close()
 
 
 def deleteMatches():
     """Remove all the match records from the database."""
-    DatabaseConnection = connect()
-    Cursor = DatabaseConnection.cursor()
-    Cursor.execute("DELETE FROM matches;")
-
-    DatabaseConnection.commit()
-    DatabaseConnection.close()
+    with GetCursor() as Cursor:
+        Cursor.execute("DELETE FROM matches;")
 
 
 def deletePlayers():
     """Remove all the player records from the database."""
-    DatabaseConnection = connect()
-    Cursor = DatabaseConnection.cursor()
-    Cursor.execute("DELETE FROM players;")
-
-    DatabaseConnection.commit()
-    DatabaseConnection.close()
+    with GetCursor() as Cursor:
+        Cursor.execute("DELETE FROM players;")
 
 
 def countPlayers():
     """Returns the number of players currently registered."""
+    with GetCursor() as Cursor:
+        Cursor.execute("SELECT COUNT(ID) FROM players;")
+        Result = Cursor.fetchone()
+        Count = int(Result[0])
 
-    DatabaseConnection = connect()
-    Cursor = DatabaseConnection.cursor()
-    Cursor.execute("SELECT COUNT(ID) FROM players;")
-    Result = Cursor.fetchone()
-    Count = int(Result[0])
-
-    DatabaseConnection.close()
-
-    return Count
+        return Count
 
 
 def registerPlayer(name):
@@ -55,17 +62,11 @@ def registerPlayer(name):
       name: the player's full name (need not be unique).
     """
 
-    SafeString = name.replace("'", "")
+    Command = "INSERT INTO players (NAME) VALUES (%s)"
+    Data = (name, )
 
-    DatabaseConnection = connect()
-    Cursor = DatabaseConnection.cursor()
-
-    Command = 'INSERT INTO players (NAME) VALUES (' + "'{person}'" + ')'
-    Command = Command.format(person = SafeString)
-
-    Cursor.execute(Command)
-    DatabaseConnection.commit() 
-    DatabaseConnection.close()
+    with GetCursor() as Cursor:
+        Cursor.execute(Command, Data)
 
 
 def playerStandings():
@@ -82,17 +83,11 @@ def playerStandings():
         matches: the number of matches the player has played
     """
 
-    DatabaseConnection = connect()
-    Cursor = DatabaseConnection.cursor()
+    with GetCursor() as Cursor:
+        Cursor.execute("SELECT * FROM standings")
+        Result = Cursor.fetchall()
 
-    Cursor.execute("SELECT * FROM standings")
-    Result = Cursor.fetchall()
-
-    print(Result)
-
-    DatabaseConnection.close()
-
-    return Result
+        return Result
 
 def reportMatch(winner, loser):
     """Records the outcome of a single match between two players.
@@ -102,15 +97,11 @@ def reportMatch(winner, loser):
       loser:  the id number of the player who lost
     """
 
-    DatabaseConnection = connect()
-    Cursor = DatabaseConnection.cursor()
+    Command = "INSERT INTO matches (ID_WINNER, ID_LOSER) VALUES (%s, %s)"
+    Data = (winner, loser, )
 
-    Command = 'INSERT INTO matches (ID_WINNER, ID_LOSER) VALUES (' + "'{win}'" + ", '{lose}'" + ')'
-    Command = Command.format(win = winner, lose = loser)
-
-    Cursor.execute(Command)
-    DatabaseConnection.commit() 
-    DatabaseConnection.close()
+    with GetCursor() as Cursor:
+        Cursor.execute(Command, Data)
  
 def swissPairings():
     """Returns a list of pairs of players for the next round of a match.
@@ -132,7 +123,7 @@ def swissPairings():
     Players = playerStandings()
     for Index in range(0, len(Players), 2):
         Result.append((Players[Index][0], Players[Index][1], Players[Index + 1][0], Players[Index + 1][1]))
-    print(Result)
+
     return Result
 
     

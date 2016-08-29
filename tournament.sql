@@ -10,6 +10,8 @@ DROP DATABASE tournament;
 
 CREATE DATABASE tournament;
 
+\c tournament
+
 DROP TABLE players CASCADE;
 DROP TABLE matches CASCADE;
 
